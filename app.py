@@ -12,12 +12,13 @@ from routes.bulk_upload_routes import bulk_upload_routes
 from middleware.error_handler import handle_error
 from middleware.auth import auth_middleware
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 
-# Configure CORS - Simplified configuration
+# Configure CORS with the Netlify domain
 CORS(app, 
-     origins=["http://localhost:3001"],
+     origins=["https://goodrichlogisticsratecard.netlify.app", "http://localhost:3001"],
      allow_headers=["Content-Type", "Authorization"],
      expose_headers=["Content-Disposition", "Content-Type"],
      supports_credentials=True)
@@ -96,4 +97,6 @@ def test_connection():
         }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001) 
+    # Get port from environment variable (Railway.app will set this)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port) 

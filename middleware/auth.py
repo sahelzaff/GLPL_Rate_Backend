@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import request, jsonify
+from flask import request, jsonify, make_response
 import jwt
 from config.database import Database
 from bson import ObjectId
@@ -18,7 +18,15 @@ def verify_token(token):
         return None
 
 def auth_middleware():
-    # Skip auth for certain routes
+    # Handle CORS preflight requests
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        return response
+
+    # Skip auth for public routes
     public_routes = [
         '/',
         '/health', 
@@ -31,7 +39,7 @@ def auth_middleware():
         '/api/rates/search'
     ]
     
-    if request.path in public_routes or request.method == 'OPTIONS':
+    if request.path in public_routes:
         return None
 
     auth_header = request.headers.get('Authorization')
@@ -48,6 +56,7 @@ def auth_middleware():
         request.current_user = user
         
     except Exception as e:
+        print(f"Auth error: {str(e)}")
         return jsonify({"error": str(e)}), 401
 
     return None

@@ -13,30 +13,40 @@ rate_model = Rate(db)
 @require_auth
 def get_rates():
     try:
+        # Get the token from request
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({"error": "Authorization header missing"}), 401
+
         rates = list(rate_model.get_all())
         populated_rates = []
         
         for rate in rates:
             try:
-                shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])})
-                pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])})
-                pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])})
+                # Get related data with error handling
+                shipping_line_id = rate.get('shipping_line_id')
+                pol_id = rate.get('pol_id')
+                pod_id = rate.get('pod_id')
+
+                shipping_line = db.shipping_lines.find_one({"_id": ObjectId(shipping_line_id)}) if shipping_line_id else None
+                pol = db.ports.find_one({"_id": ObjectId(pol_id)}) if pol_id else None
+                pod = db.ports.find_one({"_id": ObjectId(pod_id)}) if pod_id else None
                 
                 populated_rate = {
-                    '_id': str(rate['_id']),
+                    '_id': str(rate.get('_id')),
                     'shipping_line': {
-                        'id': str(rate['shipping_line_id']),
-                        'name': shipping_line['name'] if shipping_line else 'Unknown'
+                        'id': str(shipping_line_id) if shipping_line_id else None,
+                        'name': shipping_line.get('name', 'Unknown') if shipping_line else 'Unknown'
                     },
                     'pol': {
-                        'id': str(rate['pol_id']),
-                        'name': pol['port_name'] if pol else 'Unknown',
-                        'code': pol['port_code'] if pol else 'Unknown'
+                        'id': str(pol_id) if pol_id else None,
+                        'name': pol.get('port_name', 'Unknown') if pol else 'Unknown',
+                        'code': pol.get('port_code', 'Unknown') if pol else 'Unknown'
                     },
                     'pod': {
-                        'id': str(rate['pod_id']),
-                        'name': pod['port_name'] if pod else 'Unknown',
-                        'code': pod['port_code'] if pod else 'Unknown'
+                        'id': str(pod_id) if pod_id else None,
+                        'name': pod.get('port_name', 'Unknown') if pod else 'Unknown',
+                        'code': pod.get('port_code', 'Unknown') if pod else 'Unknown'
                     },
                     'valid_from': rate.get('valid_from'),
                     'valid_to': rate.get('valid_to'),
@@ -48,12 +58,15 @@ def get_rates():
             except Exception as e:
                 print(f"Error populating rate {rate.get('_id')}: {str(e)}")
                 continue
-                
-        return jsonify({
+        
+        response = {
             'status': 'success',
             'data': populated_rates,
             'count': len(populated_rates)
-        })
+        }
+        
+        return jsonify(response), 200
+
     except Exception as e:
         print(f"Error in get_rates: {str(e)}")
         return jsonify({

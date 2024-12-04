@@ -16,11 +16,15 @@ import os
 
 app = Flask(__name__)
 
-# Configure CORS with the Netlify domain
+# Configure CORS properly
 CORS(app, 
-     origins=["https://goodrichlogisticsratecard.netlify.app", "http://localhost:3001"],
-     allow_headers=["Content-Type", "Authorization"],
-     expose_headers=["Content-Disposition", "Content-Type"],
+     resources={
+         r"/api/*": {
+             "origins": ["https://goodrichlogisticsratecard.netlify.app", "http://localhost:3000"],
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"]
+         }
+     },
      supports_credentials=True)
 
 # Initialize database

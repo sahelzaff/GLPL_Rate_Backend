@@ -24,12 +24,20 @@ def get_rates():
                 
                 populated_rate = {
                     '_id': str(rate['_id']),
-                    'shipping_line': shipping_line['name'] if shipping_line else 'Unknown',
-                    'shipping_line_id': str(rate['shipping_line_id']),
-                    'pol': f"{pol['port_name']} ({pol['port_code']})" if pol else 'Unknown',
-                    'pol_id': str(rate['pol_id']),
-                    'pod': f"{pod['port_name']} ({pod['port_code']})" if pod else 'Unknown',
-                    'pod_id': str(rate['pod_id']),
+                    'shipping_line': {
+                        'id': str(rate['shipping_line_id']),
+                        'name': shipping_line['name'] if shipping_line else 'Unknown'
+                    },
+                    'pol': {
+                        'id': str(rate['pol_id']),
+                        'name': pol['port_name'] if pol else 'Unknown',
+                        'code': pol['port_code'] if pol else 'Unknown'
+                    },
+                    'pod': {
+                        'id': str(rate['pod_id']),
+                        'name': pod['port_name'] if pod else 'Unknown',
+                        'code': pod['port_code'] if pod else 'Unknown'
+                    },
                     'valid_from': rate.get('valid_from'),
                     'valid_to': rate.get('valid_to'),
                     'container_rates': rate.get('container_rates', []),
@@ -41,10 +49,17 @@ def get_rates():
                 print(f"Error populating rate {rate.get('_id')}: {str(e)}")
                 continue
                 
-        return jsonify(populated_rates)
+        return jsonify({
+            'status': 'success',
+            'data': populated_rates,
+            'count': len(populated_rates)
+        })
     except Exception as e:
-        print(f"Error fetching rates: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        print(f"Error in get_rates: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @rate_routes.route('/api/rates/search', methods=['POST'])
 def search_rates():

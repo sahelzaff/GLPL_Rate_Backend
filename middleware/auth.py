@@ -71,6 +71,7 @@ def require_auth(f):
             return f(*args, **kwargs)
             
         except Exception as e:
+            print(f"Auth error: {str(e)}")
             return jsonify({"error": str(e)}), 401
             
     return decorated

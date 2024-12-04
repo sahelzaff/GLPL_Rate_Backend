@@ -9,18 +9,23 @@ rate_routes = Blueprint('rate_routes', __name__)
 db = Database.get_instance().db
 rate_model = Rate(db)
 
-@rate_routes.route('/api/rates', methods=['GET'])
+@rate_routes.route('/api/rates', methods=['GET', 'OPTIONS'])
 @require_auth
 def get_rates():
-    # Add CORS headers
+    # Handle preflight CORS request
     if request.method == 'OPTIONS':
         response = make_response()
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
         return response
 
     try:
+        # Verify authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({"error": "Authorization header is missing"}), 401
+
         # Get all rates
         rates = list(rate_model.get_all())
         populated_rates = []
@@ -35,19 +40,22 @@ def get_rates():
                 try:
                     if 'shipping_line_id' in rate:
                         shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])})
-                except Exception:
+                except Exception as e:
+                    print(f"Error fetching shipping line: {str(e)}")
                     pass
 
                 try:
                     if 'pol_id' in rate:
                         pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])})
-                except Exception:
+                except Exception as e:
+                    print(f"Error fetching POL: {str(e)}")
                     pass
 
                 try:
                     if 'pod_id' in rate:
                         pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])})
-                except Exception:
+                except Exception as e:
+                    print(f"Error fetching POD: {str(e)}")
                     pass
                 
                 # Format the rate data
@@ -70,18 +78,13 @@ def get_rates():
                 print(f"Error populating rate {rate.get('_id')}: {str(e)}")
                 continue
 
-        return jsonify({
-            'status': 'success',
-            'data': populated_rates,
-            'count': len(populated_rates)
-        })
+        response = make_response(jsonify(populated_rates))
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
 
     except Exception as e:
         print(f"Error in get_rates: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
+        return jsonify({"error": str(e)}), 500
 
 @rate_routes.route('/api/rates/search', methods=['POST'])
 def search_rates():

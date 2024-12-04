@@ -4,6 +4,7 @@ from datetime import datetime
 import pytz
 from config.database import Database
 from bson import ObjectId
+import os
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -27,18 +28,25 @@ class ActivityLogger:
     
     def __init__(self):
         self.db = Database.get_instance().db
+        
+        # Railway.app Redis connection details
+        REDIS_URL = "redis://default:YCNmYklVCdzfCmpMymNXyhBVovpoXEdp@autorack.proxy.rlwy.net:28674"  # Replace with your actual Redis URL
+        
         try:
-            self.redis = redis.Redis(
-                host='localhost',
-                port=6379,
-                db=0,
+            self.redis = redis.from_url(
+                REDIS_URL,
                 decode_responses=True,
-                socket_connect_timeout=2
+                socket_connect_timeout=5
             )
             self.redis.ping()
+            print("Successfully connected to Redis on Railway.app!")
             self.redis_available = True
-        except redis.ConnectionError:
-            print("Warning: Redis connection failed. Falling back to MongoDB only.")
+        except redis.ConnectionError as e:
+            print(f"Warning: Redis connection failed: {str(e)}")
+            print("Falling back to MongoDB only.")
+            self.redis_available = False
+        except Exception as e:
+            print(f"Unexpected error connecting to Redis: {str(e)}")
             self.redis_available = False
 
     def log_activity(self, activity_type, data, user=None):
@@ -66,10 +74,22 @@ class ActivityLogger:
             
             if self.redis_available:
                 try:
-                    self.redis.lpush(self.REDIS_KEY, json.dumps(activity, cls=JSONEncoder))
-                    self.redis.ltrim(self.REDIS_KEY, 0, self.REDIS_LIST_MAX_LENGTH - 1)
+                    # Store in Redis with retry mechanism
+                    max_retries = 3
+                    for attempt in range(max_retries):
+                        try:
+                            self.redis.lpush(self.REDIS_KEY, json.dumps(activity, cls=JSONEncoder))
+                            self.redis.ltrim(self.REDIS_KEY, 0, self.REDIS_LIST_MAX_LENGTH - 1)
+                            break
+                        except redis.ConnectionError:
+                            if attempt == max_retries - 1:
+                                raise
+                            print(f"Redis connection failed, attempt {attempt + 1} of {max_retries}")
+                            continue
                 except redis.RedisError as e:
                     print(f"Warning: Failed to store activity in Redis: {str(e)}")
+                    # Redis operation failed, but MongoDB operation succeeded
+                    # We can continue without Redis
             
         except Exception as e:
             print(f"Error logging activity: {str(e)}")

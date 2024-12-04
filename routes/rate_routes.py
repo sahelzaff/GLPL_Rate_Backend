@@ -9,57 +9,23 @@ rate_routes = Blueprint('rate_routes', __name__)
 db = Database.get_instance().db
 rate_model = Rate(db)
 
-@rate_routes.route('/api/rates', methods=['GET', 'OPTIONS'])
-@require_auth
+@rate_routes.route('/api/rates', methods=['GET'])
 def get_rates():
-    # Handle preflight CORS request
-    if request.method == 'OPTIONS':
-        response = make_response()
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,OPTIONS')
-        return response
-
     try:
-        # Verify authorization header
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({"error": "Authorization header is missing"}), 401
-
-        # Get all rates
-        rates = list(rate_model.get_all())
-        populated_rates = []
+        # Get all rates from rate model
+        rates = list(db.rates.find())
         
+        # Format response data
+        formatted_rates = []
         for rate in rates:
             try:
-                # Get related data with proper error handling
-                shipping_line = None
-                pol = None
-                pod = None
-                
-                try:
-                    if 'shipping_line_id' in rate:
-                        shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])})
-                except Exception as e:
-                    print(f"Error fetching shipping line: {str(e)}")
-                    pass
+                # Get related data
+                shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])}) if 'shipping_line_id' in rate else None
+                pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])}) if 'pol_id' in rate else None
+                pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])}) if 'pod_id' in rate else None
 
-                try:
-                    if 'pol_id' in rate:
-                        pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])})
-                except Exception as e:
-                    print(f"Error fetching POL: {str(e)}")
-                    pass
-
-                try:
-                    if 'pod_id' in rate:
-                        pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])})
-                except Exception as e:
-                    print(f"Error fetching POD: {str(e)}")
-                    pass
-                
-                # Format the rate data
-                populated_rate = {
+                # Format rate data
+                formatted_rate = {
                     '_id': str(rate['_id']),
                     'shipping_line': shipping_line['name'] if shipping_line else 'Unknown',
                     'shipping_line_id': str(rate['shipping_line_id']) if 'shipping_line_id' in rate else None,
@@ -73,18 +39,23 @@ def get_rates():
                     'created_at': rate.get('created_at'),
                     'updated_at': rate.get('updated_at')
                 }
-                populated_rates.append(populated_rate)
+                formatted_rates.append(formatted_rate)
             except Exception as e:
-                print(f"Error populating rate {rate.get('_id')}: {str(e)}")
+                print(f"Error formatting rate {rate.get('_id')}: {str(e)}")
                 continue
 
-        response = make_response(jsonify(populated_rates))
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
+        return jsonify({
+            'status': 'success',
+            'data': formatted_rates,
+            'count': len(formatted_rates)
+        })
 
     except Exception as e:
         print(f"Error in get_rates: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @rate_routes.route('/api/rates/search', methods=['POST'])
 def search_rates():

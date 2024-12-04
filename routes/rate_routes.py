@@ -10,33 +10,40 @@ db = Database.get_instance().db
 rate_model = Rate(db)
 
 @rate_routes.route('/api/rates', methods=['GET'])
+@require_auth
 def get_rates():
     try:
         rates = list(rate_model.get_all())
         populated_rates = []
+        
         for rate in rates:
-            shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])})
-            pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])})
-            pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])})
-            
-            populated_rate = {
-                '_id': str(rate['_id']),
-                'shipping_line': shipping_line['name'] if shipping_line else 'Unknown',
-                'shipping_line_id': str(rate['shipping_line_id']),
-                'pol': f"{pol['port_name']} ({pol['port_code']})" if pol else 'Unknown',
-                'pol_id': str(rate['pol_id']),
-                'pod': f"{pod['port_name']} ({pod['port_code']})" if pod else 'Unknown',
-                'pod_id': str(rate['pod_id']),
-                'valid_from': rate.get('valid_from'),
-                'valid_to': rate.get('valid_to'),
-                'container_rates': rate.get('container_rates', []),
-                'created_at': rate.get('created_at'),
-                'updated_at': rate.get('updated_at')
-            }
-            populated_rates.append(populated_rate)
-            
+            try:
+                shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])})
+                pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])})
+                pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])})
+                
+                populated_rate = {
+                    '_id': str(rate['_id']),
+                    'shipping_line': shipping_line['name'] if shipping_line else 'Unknown',
+                    'shipping_line_id': str(rate['shipping_line_id']),
+                    'pol': f"{pol['port_name']} ({pol['port_code']})" if pol else 'Unknown',
+                    'pol_id': str(rate['pol_id']),
+                    'pod': f"{pod['port_name']} ({pod['port_code']})" if pod else 'Unknown',
+                    'pod_id': str(rate['pod_id']),
+                    'valid_from': rate.get('valid_from'),
+                    'valid_to': rate.get('valid_to'),
+                    'container_rates': rate.get('container_rates', []),
+                    'created_at': rate.get('created_at'),
+                    'updated_at': rate.get('updated_at')
+                }
+                populated_rates.append(populated_rate)
+            except Exception as e:
+                print(f"Error populating rate {rate.get('_id')}: {str(e)}")
+                continue
+                
         return jsonify(populated_rates)
     except Exception as e:
+        print(f"Error fetching rates: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @rate_routes.route('/api/rates/search', methods=['POST'])
@@ -105,39 +112,23 @@ def search_rates():
 @require_auth
 def create_rate():
     try:
-        rate_data = request.json
-        print("Received rate data:", rate_data)
+        data = request.json
         
-        if not rate_data:
-            return jsonify({"error": "No data provided"}), 400
-
         # Validate required fields
-        required_fields = ['shipping_line', 'pol_ids', 'pod_ids', 'valid_from', 'valid_to', 'container_rates']
-        missing_fields = [field for field in required_fields if field not in rate_data]
-        if missing_fields:
-            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+        required_fields = ['shipping_line', 'pol', 'pod', 'valid_from', 'valid_to', 'container_rates']
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
 
-        # Create rates for each POL-POD combination
-        results = []
-        for pol_id in rate_data['pol_ids']:
-            for pod_id in rate_data['pod_ids']:
-                single_rate = {
-                    'shipping_line': rate_data['shipping_line'],
-                    'pol': pol_id,
-                    'pod': pod_id,
-                    'valid_from': rate_data['valid_from'],
-                    'valid_to': rate_data['valid_to'],
-                    'container_rates': rate_data['container_rates'],
-                    'notes': rate_data.get('notes', [])  # Add notes to the rate data
-                }
-                result = rate_model.create(single_rate)
-                results.append(result)
-
+        # Create rate
+        result = rate_model.create(data)
+        
         return jsonify({
-            "message": f"Successfully created {len(results)} rates",
-            "count": len(results)
+            "message": "Rate created successfully",
+            "id": str(result.inserted_id)
         }), 201
-
+        
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         print(f"Error creating rate: {str(e)}")
         return jsonify({"error": str(e)}), 500
@@ -168,40 +159,29 @@ def delete_rate(rate_id):
         return jsonify({"error": "Rate not found"}), 404
     except Exception as e:
         print(f"Error deleting rate: {str(e)}")
-        return jsonify({"error": "Failed to delete rate"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @rate_routes.route('/api/rates/<rate_id>', methods=['PUT'])
 @require_auth
 def update_rate(rate_id):
     try:
-        rate_data = request.json
-        if not rate_data:
-            return jsonify({"error": "No data provided"}), 400
-
+        data = request.json
+        
         # Validate required fields
         required_fields = ['shipping_line', 'pol', 'pod', 'valid_from', 'valid_to', 'container_rates']
-        missing_fields = [field for field in required_fields if field not in rate_data]
-        if missing_fields:
-            return jsonify({"error": f"Missing required fields: {', '.join(missing_fields)}"}), 400
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
 
-        # Validate container rates
-        if not isinstance(rate_data['container_rates'], list) or not rate_data['container_rates']:
-            return jsonify({"error": "Container rates must be a non-empty array"}), 400
-
-        for rate in rate_data['container_rates']:
-            if not isinstance(rate, dict) or 'type' not in rate or 'rate' not in rate:
-                return jsonify({"error": "Invalid container rate format"}), 400
-
-        result = rate_model.update(rate_id, rate_data)
+        result = rate_model.update(rate_id, data)
         if result.modified_count:
             return jsonify({"message": "Rate updated successfully"})
         return jsonify({"error": "Rate not found"}), 404
-
+        
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         print(f"Error updating rate: {str(e)}")
-        return jsonify({"error": "Failed to update rate"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @rate_routes.route('/api/rates/bulk-create', methods=['POST'])
 @require_auth
@@ -265,4 +245,13 @@ def add_rate_note(rate_id):
             "id": str(result.inserted_id)
         }), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 500 
+        return jsonify({"error": str(e)}), 500
+
+# Add logging for debugging
+@rate_routes.before_request
+def log_request_info():
+    print(f"Request Method: {request.method}")
+    print(f"Request URL: {request.url}")
+    print(f"Request Headers: {request.headers}")
+    if request.is_json:
+        print(f"Request Data: {request.json}") 

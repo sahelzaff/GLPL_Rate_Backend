@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from bson import ObjectId
 from datetime import datetime
 from middleware.auth import require_auth
@@ -12,6 +12,14 @@ rate_model = Rate(db)
 @rate_routes.route('/api/rates', methods=['GET'])
 @require_auth
 def get_rates():
+    # Add CORS headers
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        return response
+
     try:
         # Get all rates
         rates = list(rate_model.get_all())

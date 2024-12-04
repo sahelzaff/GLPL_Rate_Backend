@@ -5,7 +5,7 @@ def cors_middleware():
         response = make_response()
         # Get the Origin header from the request
         origin = request.headers.get('Origin')
-        allowed_origins = ['https://goodrichlogisticsratecard.netlify.app', 'http://localhost:3001']
+        allowed_origins = ['https://goodrichlogisticsratecard.netlify.app', 'http://localhost:3000']
         
         # Check if the request origin is in our allowed list
         if origin in allowed_origins:

@@ -67,6 +67,7 @@ def require_auth(f):
         auth_header = request.headers.get('Authorization')
         
         if not auth_header:
+            print("No authorization header found")
             return jsonify({"error": "No authorization header"}), 401
             
         try:
@@ -74,6 +75,7 @@ def require_auth(f):
             user = verify_token(token)
             
             if not user:
+                print("Invalid or expired token")
                 return jsonify({"error": "Invalid or expired token"}), 401
                 
             request.current_user = user

@@ -40,17 +40,19 @@ class Rate:
             
             for rate in cursor:
                 try:
-                    # Convert ObjectIds to strings
-                    rate['_id'] = str(rate['_id'])
-                    rate['shipping_line_id'] = str(rate['shipping_line_id'])
-                    rate['pol_id'] = str(rate['pol_id'])
-                    rate['pod_id'] = str(rate['pod_id'])
-                    
-                    # Ensure container_rates exists
-                    if 'container_rates' not in rate:
-                        rate['container_rates'] = []
-                        
-                    rates.append(rate)
+                    # Ensure all required fields exist
+                    rate_data = {
+                        '_id': str(rate['_id']),
+                        'shipping_line_id': str(rate['shipping_line_id']) if 'shipping_line_id' in rate else None,
+                        'pol_id': str(rate['pol_id']) if 'pol_id' in rate else None,
+                        'pod_id': str(rate['pod_id']) if 'pod_id' in rate else None,
+                        'valid_from': rate.get('valid_from'),
+                        'valid_to': rate.get('valid_to'),
+                        'container_rates': rate.get('container_rates', []),
+                        'created_at': rate.get('created_at'),
+                        'updated_at': rate.get('updated_at')
+                    }
+                    rates.append(rate_data)
                 except Exception as e:
                     print(f"Error processing rate: {str(e)}")
                     continue

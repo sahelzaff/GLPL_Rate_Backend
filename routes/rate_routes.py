@@ -13,22 +13,44 @@ rate_model = Rate(db)
 @require_auth
 def get_rates():
     try:
+        # Get all rates
         rates = list(rate_model.get_all())
         populated_rates = []
         
         for rate in rates:
             try:
-                # Get related data
-                shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])})
-                pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])})
-                pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])})
+                # Get related data with proper error handling
+                shipping_line = None
+                pol = None
+                pod = None
+                
+                try:
+                    if 'shipping_line_id' in rate:
+                        shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])})
+                except Exception:
+                    pass
+
+                try:
+                    if 'pol_id' in rate:
+                        pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])})
+                except Exception:
+                    pass
+
+                try:
+                    if 'pod_id' in rate:
+                        pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])})
+                except Exception:
+                    pass
                 
                 # Format the rate data
                 populated_rate = {
-                    'id': str(rate['_id']),
+                    '_id': str(rate['_id']),
                     'shipping_line': shipping_line['name'] if shipping_line else 'Unknown',
+                    'shipping_line_id': str(rate['shipping_line_id']) if 'shipping_line_id' in rate else None,
                     'pol': f"{pol['port_name']} ({pol['port_code']})" if pol else 'Unknown',
+                    'pol_id': str(rate['pol_id']) if 'pol_id' in rate else None,
                     'pod': f"{pod['port_name']} ({pod['port_code']})" if pod else 'Unknown',
+                    'pod_id': str(rate['pod_id']) if 'pod_id' in rate else None,
                     'valid_from': rate.get('valid_from'),
                     'valid_to': rate.get('valid_to'),
                     'container_rates': rate.get('container_rates', []),
@@ -44,7 +66,7 @@ def get_rates():
             'status': 'success',
             'data': populated_rates,
             'count': len(populated_rates)
-        }), 200
+        })
 
     except Exception as e:
         print(f"Error in get_rates: {str(e)}")

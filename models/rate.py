@@ -35,18 +35,26 @@ class Rate:
 
     def get_all(self):
         try:
-            # Find all rates and sort by creation date
             cursor = self.collection.find().sort('created_at', -1)
-            
-            # Convert cursor to list and handle ObjectId conversion
             rates = []
-            for rate in cursor:
-                rate['_id'] = str(rate['_id'])
-                rate['shipping_line_id'] = str(rate['shipping_line_id'])
-                rate['pol_id'] = str(rate['pol_id'])
-                rate['pod_id'] = str(rate['pod_id'])
-                rates.append(rate)
             
+            for rate in cursor:
+                try:
+                    # Convert ObjectIds to strings
+                    rate['_id'] = str(rate['_id'])
+                    rate['shipping_line_id'] = str(rate['shipping_line_id'])
+                    rate['pol_id'] = str(rate['pol_id'])
+                    rate['pod_id'] = str(rate['pod_id'])
+                    
+                    # Ensure container_rates exists
+                    if 'container_rates' not in rate:
+                        rate['container_rates'] = []
+                        
+                    rates.append(rate)
+                except Exception as e:
+                    print(f"Error processing rate: {str(e)}")
+                    continue
+                    
             return rates
         except Exception as e:
             print(f"Error in get_all: {str(e)}")

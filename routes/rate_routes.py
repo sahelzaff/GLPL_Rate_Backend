@@ -1,16 +1,24 @@
 from flask import Blueprint, request, jsonify
 from bson import ObjectId
-from datetime import datetime
-from middleware.auth import admin_required
-from config.database import Database
+from middleware.auth import require_auth, admin_required
 from models.rate import Rate
+from config.database import Database
 
 rate_routes = Blueprint('rate_routes', __name__)
-db = Database.get_instance()
-rate_model = Rate(db.db)
+db = Database.get_instance().db
+rate_model = Rate(db)
+
+# Add logging for debugging
+@rate_routes.before_request
+def log_request_info():
+    print(f"Request Method: {request.method}")
+    print(f"Request URL: {request.url}")
+    print(f"Request Headers: {request.headers}")
+    # Only try to get JSON for POST/PUT requests
+    if request.method in ['POST', 'PUT'] and request.is_json:
+        print(f"Request Data: {request.get_json()}")
 
 @rate_routes.route('/api/rates', methods=['GET'])
-@admin_required
 def get_rates():
     try:
         # Get all rates from rate model
@@ -20,19 +28,14 @@ def get_rates():
         formatted_rates = []
         for rate in rates:
             try:
-                # Get shipping line details
-                shipping_line = db.db.shipping_lines.find_one({'_id': rate.get('shipping_line_id')})
-                pol = db.db.ports.find_one({'_id': rate.get('pol_id')})
-                pod = db.db.ports.find_one({'_id': rate.get('pod_id')})
-
                 # Format rate data with safe gets
                 formatted_rate = {
                     '_id': str(rate['_id']),
-                    'shipping_line': shipping_line.get('name', 'Unknown') if shipping_line else 'Unknown',
+                    'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
                     'shipping_line_id': str(rate.get('shipping_line_id')),
-                    'pol': f"{pol.get('port_name', 'Unknown')} ({pol.get('port_code', 'Unknown')})" if pol else 'Unknown',
+                    'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
                     'pol_id': str(rate.get('pol_id')),
-                    'pod': f"{pod.get('port_name', 'Unknown')} ({pod.get('port_code', 'Unknown')})" if pod else 'Unknown',
+                    'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
                     'pod_id': str(rate.get('pod_id')),
                     'valid_from': rate.get('valid_from'),
                     'valid_to': rate.get('valid_to'),
@@ -50,6 +53,7 @@ def get_rates():
             'data': formatted_rates,
             'count': len(formatted_rates)
         })
+
     except Exception as e:
         print(f"Error in get_rates: {str(e)}")
         return jsonify({
@@ -57,82 +61,47 @@ def get_rates():
             'message': str(e)
         }), 500
 
-@rate_routes.route('/api/rates/<rate_id>', methods=['PUT'])
-@admin_required
-def update_rate(rate_id):
+@rate_routes.route('/api/rates/search', methods=['POST'])
+def search_rates():
     try:
         data = request.get_json()
-        if not data:
+        if not data or not data.get('pol_code') or not data.get('pod_code'):
             return jsonify({
-                'status': 'error',
-                'message': 'No data provided'
-            }), 400
+                "status": "success",
+                "data": [],
+                "count": 0
+            }), 200
 
-        # Clean and prepare data
-        update_data = {
-            'shipping_line_id': ObjectId(data['shipping_line']),
-            'pol_id': ObjectId(data['pol']),
-            'pod_id': ObjectId(data['pod']),
-            'valid_from': data['valid_from'],
-            'valid_to': data['valid_to'],
-            'container_rates': [],
-            'updated_at': datetime.utcnow()
-        }
+        results = rate_model.search(data['pol_code'], data['pod_code'])
+        
+        # Ensure results is always an array
+        formatted_results = []
+        for rate in results:
+            try:
+                formatted_rate = {
+                    '_id': str(rate['_id']),
+                    'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
+                    'shipping_line_id': str(rate.get('shipping_line_id')),
+                    'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
+                    'pol_id': str(rate.get('pol_id')),
+                    'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
+                    'pod_id': str(rate.get('pod_id')),
+                    'valid_from': rate.get('valid_from'),
+                    'valid_to': rate.get('valid_to'),
+                    'container_rates': rate.get('container_rates', [])
+                }
+                formatted_results.append(formatted_rate)
+            except Exception as e:
+                print(f"Error formatting rate: {str(e)}")
+                continue
 
-        # Process container rates
-        for rate in data['container_rates']:
-            base_rate = float(rate.get('base_rate', 0))
-            ewrs_laden = float(rate.get('ewrs_laden', 0))
-            ewrs_empty = float(rate.get('ewrs_empty', 0))
-            baf = float(rate.get('baf', 0))
-            reefer_surcharge = float(rate.get('reefer_surcharge', 0))
-
-            container_rate = {
-                'type': rate['type'],
-                'base_rate': base_rate,
-                'ewrs_laden': ewrs_laden,
-                'ewrs_empty': ewrs_empty,
-                'baf': baf,
-                'reefer_surcharge': reefer_surcharge,
-                'rate': base_rate + ewrs_laden + ewrs_empty + baf + reefer_surcharge,
-                'total_cost': base_rate + ewrs_laden + ewrs_empty + baf + reefer_surcharge
-            }
-            update_data['container_rates'].append(container_rate)
-
-        result = rate_model.update(rate_id, update_data)
-        if result.modified_count:
-            return jsonify({
-                'status': 'success',
-                'message': 'Rate updated successfully'
-            })
         return jsonify({
-            'status': 'error',
-            'message': 'Rate not found or no changes made'
-        }), 404
-
+            'status': 'success',
+            'data': formatted_results,
+            'count': len(formatted_results)
+        })
     except Exception as e:
-        print(f"Error updating rate: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-@rate_routes.route('/api/rates/<rate_id>', methods=['DELETE'])
-@admin_required
-def delete_rate(rate_id):
-    try:
-        result = rate_model.delete(rate_id)
-        if result.deleted_count:
-            return jsonify({
-                'status': 'success',
-                'message': 'Rate deleted successfully'
-            })
-        return jsonify({
-            'status': 'error',
-            'message': 'Rate not found'
-        }), 404
-    except Exception as e:
-        print(f"Error deleting rate: {str(e)}")
+        print(f"Error in search_rates: {str(e)}")
         return jsonify({
             'status': 'error',
             'message': str(e)

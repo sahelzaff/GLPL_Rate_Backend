@@ -9,6 +9,16 @@ rate_routes = Blueprint('rate_routes', __name__)
 db = Database.get_instance().db
 rate_model = Rate(db)
 
+# Add logging for debugging
+@rate_routes.before_request
+def log_request_info():
+    print(f"Request Method: {request.method}")
+    print(f"Request URL: {request.url}")
+    print(f"Request Headers: {request.headers}")
+    # Only try to get JSON for POST/PUT requests
+    if request.method in ['POST', 'PUT'] and request.is_json:
+        print(f"Request Data: {request.get_json()}")
+
 @rate_routes.route('/api/rates', methods=['GET'])
 @cross_origin()
 def get_rates():
@@ -181,12 +191,3 @@ def add_rate_note(rate_id):
             'status': 'error',
             'message': str(e)
         }), 500
-
-# Add logging for debugging
-@rate_routes.before_request
-def log_request_info():
-    print(f"Request Method: {request.method}")
-    print(f"Request URL: {request.url}")
-    print(f"Request Headers: {request.headers}")
-    if request.is_json:
-        print(f"Request Data: {request.json}") 

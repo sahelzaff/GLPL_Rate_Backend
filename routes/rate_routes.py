@@ -66,13 +66,39 @@ def search_rates():
     try:
         data = request.get_json()
         if not data or not data.get('pol_code') or not data.get('pod_code'):
-            return jsonify({"error": "POL and POD codes are required"}), 400
+            return jsonify({
+                "status": "success",
+                "data": [],
+                "count": 0
+            }), 200
 
         results = rate_model.search(data['pol_code'], data['pod_code'])
+        
+        # Ensure results is always an array
+        formatted_results = []
+        for rate in results:
+            try:
+                formatted_rate = {
+                    '_id': str(rate['_id']),
+                    'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
+                    'shipping_line_id': str(rate.get('shipping_line_id')),
+                    'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
+                    'pol_id': str(rate.get('pol_id')),
+                    'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
+                    'pod_id': str(rate.get('pod_id')),
+                    'valid_from': rate.get('valid_from'),
+                    'valid_to': rate.get('valid_to'),
+                    'container_rates': rate.get('container_rates', [])
+                }
+                formatted_results.append(formatted_rate)
+            except Exception as e:
+                print(f"Error formatting rate: {str(e)}")
+                continue
+
         return jsonify({
             'status': 'success',
-            'data': results,
-            'count': len(results)
+            'data': formatted_results,
+            'count': len(formatted_results)
         })
     except Exception as e:
         print(f"Error in search_rates: {str(e)}")

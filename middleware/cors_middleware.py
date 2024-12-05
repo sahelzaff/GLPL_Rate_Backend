@@ -14,4 +14,16 @@ def cors_middleware():
             response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
             response.headers.add('Access-Control-Allow-Credentials', 'true')
             return response
-    return None
+            
+    # For non-OPTIONS requests
+    response = make_response()
+    origin = request.headers.get('Origin')
+    allowed_origins = ['https://goodrichlogisticsratecard.netlify.app', 'http://localhost:3000']
+    
+    if origin in allowed_origins:
+        response.headers.add('Access-Control-Allow-Origin', origin)
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+    
+    return response

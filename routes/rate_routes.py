@@ -118,12 +118,28 @@ def create_rate():
                 'message': 'No data provided'
             }), 400
 
-        result = rate_model.create([data])
+        # Create rates for each POL-POD combination
+        results = []
+        for pol_id in data['pol_ids']:
+            for pod_id in data['pod_ids']:
+                single_rate = {
+                    'shipping_line': data['shipping_line'],
+                    'pol': pol_id,
+                    'pod': pod_id,
+                    'valid_from': data['valid_from'],
+                    'valid_to': data['valid_to'],
+                    'container_rates': data['container_rates'],
+                    'notes': data.get('notes', [])
+                }
+                result = rate_model.create(single_rate)
+                results.append(result)
+
         return jsonify({
             'status': 'success',
-            'message': 'Rate created successfully',
-            'id': str(result[0])
+            'message': f'Successfully created {len(results)} rates',
+            'ids': [str(result.inserted_id) for result in results]
         }), 201
+
     except Exception as e:
         print(f"Error in create_rate: {str(e)}")
         return jsonify({

@@ -4,6 +4,8 @@ from datetime import datetime
 class Rate:
     def __init__(self, db):
         self.collection = db.rates
+        self.history_collection = db.rate_history
+        self.notes_collection = db.rate_notes
         self.shipping_lines = db.shipping_lines
         self.ports = db.ports
 
@@ -152,4 +154,77 @@ class Rate:
             return self.notes_collection.insert_one(note)
         except Exception as e:
             print(f"Error adding note: {str(e)}")
+            raise
+
+    def create(self, rate_data):
+        try:
+            # Validate required fields
+            required_fields = ['shipping_line', 'pol', 'pod', 'valid_from', 'valid_to', 'container_rates']
+            for field in required_fields:
+                if field not in rate_data:
+                    raise ValueError(f"Missing required field: {field}")
+
+            # Clean and prepare data
+            cleaned_data = {
+                'shipping_line_id': ObjectId(rate_data['shipping_line']),
+                'pol_id': ObjectId(rate_data['pol']),
+                'pod_id': ObjectId(rate_data['pod']),
+                'valid_from': rate_data['valid_from'],
+                'valid_to': rate_data['valid_to'],
+                'container_rates': [],
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow()
+            }
+
+            # Process container rates
+            for rate in rate_data['container_rates']:
+                base_rate = float(rate.get('base_rate', 0))
+                ewrs_laden = float(rate.get('ewrs_laden', 0))
+                ewrs_empty = float(rate.get('ewrs_empty', 0))
+                baf = float(rate.get('baf', 0))
+                reefer_surcharge = float(rate.get('reefer_surcharge', 0))
+
+                container_rate = {
+                    'type': rate['type'],
+                    'base_rate': base_rate,
+                    'ewrs_laden': ewrs_laden,
+                    'ewrs_empty': ewrs_empty,
+                    'baf': baf,
+                    'reefer_surcharge': reefer_surcharge,
+                    'rate': base_rate + ewrs_laden + ewrs_empty + baf + reefer_surcharge,
+                    'total_cost': base_rate + ewrs_laden + ewrs_empty + baf + reefer_surcharge
+                }
+                cleaned_data['container_rates'].append(container_rate)
+
+            # Insert the rate
+            result = self.collection.insert_one(cleaned_data)
+
+            # Add notes if present
+            if 'notes' in rate_data and rate_data['notes']:
+                for note in rate_data['notes']:
+                    if note.get('description'):
+                        self.notes_collection.insert_one({
+                            'rate_id': result.inserted_id,
+                            'description': note['description'],
+                            'created_at': datetime.utcnow(),
+                            'updated_at': datetime.utcnow()
+                        })
+
+            # Create history record
+            history_data = {
+                'rate_id': result.inserted_id,
+                'shipping_line_id': cleaned_data['shipping_line_id'],
+                'pol_id': cleaned_data['pol_id'],
+                'pod_id': cleaned_data['pod_id'],
+                'container_rates': cleaned_data['container_rates'],
+                'valid_from': cleaned_data['valid_from'],
+                'valid_to': cleaned_data['valid_to'],
+                'created_at': datetime.utcnow()
+            }
+            self.history_collection.insert_one(history_data)
+
+            return result
+
+        except Exception as e:
+            print(f"Error creating rate: {str(e)}")
             raise

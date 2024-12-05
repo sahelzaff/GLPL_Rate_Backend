@@ -3,7 +3,6 @@ from bson import ObjectId
 from middleware.auth import require_auth, admin_required
 from models.rate import Rate
 from config.database import Database
-from flask_cors import cross_origin
 
 rate_routes = Blueprint('rate_routes', __name__)
 db = Database.get_instance().db
@@ -20,16 +19,8 @@ def log_request_info():
         print(f"Request Data: {request.get_json()}")
 
 @rate_routes.route('/api/rates', methods=['GET'])
-@cross_origin()
 def get_rates():
     try:
-        # Handle preflight request
-        if request.method == 'OPTIONS':
-            response = jsonify({'status': 'success'})
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-            return response
-
         # Get all rates from rate model
         rates = list(rate_model.get_all())
         
@@ -57,19 +48,11 @@ def get_rates():
                 print(f"Error formatting rate {rate.get('_id')}: {str(e)}")
                 continue
 
-        response = jsonify({
+        return jsonify({
             'status': 'success',
             'data': formatted_rates,
             'count': len(formatted_rates)
         })
-        
-        # Add CORS headers
-        response.headers.add('Access-Control-Allow-Origin', 'https://goodrichlogisticsratecard.netlify.app')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        
-        return response
 
     except Exception as e:
         print(f"Error in get_rates: {str(e)}")

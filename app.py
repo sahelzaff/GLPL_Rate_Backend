@@ -16,7 +16,7 @@ import os
 
 app = Flask(__name__)
 
-# Configure CORS properly
+# Configure CORS properly - this will be our single source of CORS configuration
 CORS(app, 
      resources={
          r"/api/*": {
@@ -26,7 +26,9 @@ CORS(app,
              "supports_credentials": True,
              "expose_headers": ["Content-Type", "Authorization"]
          }
-     })
+     },
+     allow_headers=["Content-Type", "Authorization"],
+     supports_credentials=True)
 
 # Initialize database
 db = Database.get_instance()

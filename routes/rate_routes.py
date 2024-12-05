@@ -1,6 +1,5 @@
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify
 from bson import ObjectId
-from datetime import datetime
 from middleware.auth import require_auth, admin_required
 from models.rate import Rate
 from config.database import Database
@@ -13,48 +12,21 @@ rate_model = Rate(db)
 def get_rates():
     try:
         # Get all rates from rate model
-        rates = list(db.rates.find())
+        rates = list(rate_model.get_all())
         
         # Format response data
         formatted_rates = []
         for rate in rates:
             try:
-                # Safely get related data with error handling
-                shipping_line_id = rate.get('shipping_line_id')
-                pol_id = rate.get('pol_id')
-                pod_id = rate.get('pod_id')
-                
-                shipping_line = None
-                pol = None
-                pod = None
-                
-                try:
-                    if shipping_line_id:
-                        shipping_line = db.shipping_lines.find_one({"_id": ObjectId(shipping_line_id)})
-                except:
-                    pass
-                    
-                try:
-                    if pol_id:
-                        pol = db.ports.find_one({"_id": ObjectId(pol_id)})
-                except:
-                    pass
-                    
-                try:
-                    if pod_id:
-                        pod = db.ports.find_one({"_id": ObjectId(pod_id)})
-                except:
-                    pass
-
                 # Format rate data with safe gets
                 formatted_rate = {
                     '_id': str(rate['_id']),
-                    'shipping_line': shipping_line.get('name', 'Unknown') if shipping_line else 'Unknown',
-                    'shipping_line_id': str(shipping_line_id) if shipping_line_id else None,
-                    'pol': f"{pol.get('port_name', 'Unknown')} ({pol.get('port_code', 'Unknown')})" if pol else 'Unknown',
-                    'pol_id': str(pol_id) if pol_id else None,
-                    'pod': f"{pod.get('port_name', 'Unknown')} ({pod.get('port_code', 'Unknown')})" if pod else 'Unknown',
-                    'pod_id': str(pod_id) if pod_id else None,
+                    'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
+                    'shipping_line_id': str(rate.get('shipping_line_id')),
+                    'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
+                    'pol_id': str(rate.get('pol_id')),
+                    'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
+                    'pod_id': str(rate.get('pod_id')),
                     'valid_from': rate.get('valid_from'),
                     'valid_to': rate.get('valid_to'),
                     'container_rates': rate.get('container_rates', []),
@@ -82,7 +54,7 @@ def get_rates():
 @rate_routes.route('/api/rates/search', methods=['POST'])
 def search_rates():
     try:
-        data = request.json
+        data = request.get_json()
         if not data or not data.get('pol_code') or not data.get('pod_code'):
             return jsonify({"error": "POL and POD codes are required"}), 400
 
@@ -99,11 +71,35 @@ def search_rates():
             'message': str(e)
         }), 500
 
+@rate_routes.route('/api/rates', methods=['POST'])
+@admin_required
+def create_rate():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'status': 'error',
+                'message': 'No data provided'
+            }), 400
+
+        result = rate_model.create([data])
+        return jsonify({
+            'status': 'success',
+            'message': 'Rate created successfully',
+            'id': str(result[0])
+        }), 201
+    except Exception as e:
+        print(f"Error in create_rate: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 @rate_routes.route('/api/rates/bulk', methods=['POST'])
 @admin_required
 def create_bulk_rates():
     try:
-        data = request.json
+        data = request.get_json()
         if not data:
             return jsonify({
                 'status': 'error',
@@ -114,9 +110,8 @@ def create_bulk_rates():
         return jsonify({
             'status': 'success',
             'message': f"Successfully created {len(results)} rates",
-            'count': len(results)
+            'ids': [str(id) for id in results]
         }), 201
-
     except Exception as e:
         print(f"Error in create_bulk_rates: {str(e)}")
         return jsonify({

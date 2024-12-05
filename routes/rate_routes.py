@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, make_response
 from bson import ObjectId
 from datetime import datetime
-from middleware.auth import require_auth
+from middleware.auth import require_auth, admin_required
 from models.rate import Rate
 from config.database import Database
 
@@ -84,7 +84,7 @@ def search_rates():
         }), 500
 
 @rate_routes.route('/api/rates/bulk', methods=['POST'])
-@require_auth
+@admin_required
 def create_bulk_rates():
     try:
         data = request.json
@@ -109,7 +109,7 @@ def create_bulk_rates():
         }), 500
 
 @rate_routes.route('/api/rates/<rate_id>/notes', methods=['GET'])
-@require_auth
+@admin_required
 def get_rate_notes(rate_id):
     try:
         notes = rate_model.get_notes(rate_id)
@@ -131,7 +131,7 @@ def get_rate_notes(rate_id):
         }), 500
 
 @rate_routes.route('/api/rates/<rate_id>/notes', methods=['POST'])
-@require_auth
+@admin_required
 def add_rate_note(rate_id):
     try:
         data = request.json

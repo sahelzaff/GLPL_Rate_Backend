@@ -36,7 +36,8 @@ def auth_middleware():
         '/api/ports/search',
         '/api/shipping-lines',
         '/api/shipping-lines/search',
-        '/api/rates/search'
+        '/api/rates/search',
+        '/api/rates'
     ]
     
     if request.path in public_routes:

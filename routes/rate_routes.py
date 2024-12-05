@@ -3,6 +3,7 @@ from bson import ObjectId
 from datetime import datetime
 from middleware.auth import admin_required
 from config.database import Database
+from models.rate import Rate
 
 rate_routes = Blueprint('rate_routes', __name__)
 db = Database.get_instance()

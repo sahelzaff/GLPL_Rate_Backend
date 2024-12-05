@@ -14,31 +14,47 @@ def get_rates():
     try:
         # Get all rates from rate model
         rates = list(db.rates.find())
-        if not rates:
-            return jsonify({
-                'status': 'success',
-                'data': [],
-                'count': 0
-            })
         
         # Format response data
         formatted_rates = []
         for rate in rates:
             try:
-                # Get related data
-                shipping_line = db.shipping_lines.find_one({"_id": ObjectId(rate['shipping_line_id'])}) if 'shipping_line_id' in rate else None
-                pol = db.ports.find_one({"_id": ObjectId(rate['pol_id'])}) if 'pol_id' in rate else None
-                pod = db.ports.find_one({"_id": ObjectId(rate['pod_id'])}) if 'pod_id' in rate else None
+                # Safely get related data with error handling
+                shipping_line_id = rate.get('shipping_line_id')
+                pol_id = rate.get('pol_id')
+                pod_id = rate.get('pod_id')
+                
+                shipping_line = None
+                pol = None
+                pod = None
+                
+                try:
+                    if shipping_line_id:
+                        shipping_line = db.shipping_lines.find_one({"_id": ObjectId(shipping_line_id)})
+                except:
+                    pass
+                    
+                try:
+                    if pol_id:
+                        pol = db.ports.find_one({"_id": ObjectId(pol_id)})
+                except:
+                    pass
+                    
+                try:
+                    if pod_id:
+                        pod = db.ports.find_one({"_id": ObjectId(pod_id)})
+                except:
+                    pass
 
-                # Format rate data
+                # Format rate data with safe gets
                 formatted_rate = {
                     '_id': str(rate['_id']),
-                    'shipping_line': shipping_line['name'] if shipping_line else 'Unknown',
-                    'shipping_line_id': str(rate['shipping_line_id']) if 'shipping_line_id' in rate else None,
-                    'pol': f"{pol['port_name']} ({pol['port_code']})" if pol else 'Unknown',
-                    'pol_id': str(rate['pol_id']) if 'pol_id' in rate else None,
-                    'pod': f"{pod['port_name']} ({pod['port_code']})" if pod else 'Unknown',
-                    'pod_id': str(rate['pod_id']) if 'pod_id' in rate else None,
+                    'shipping_line': shipping_line.get('name', 'Unknown') if shipping_line else 'Unknown',
+                    'shipping_line_id': str(shipping_line_id) if shipping_line_id else None,
+                    'pol': f"{pol.get('port_name', 'Unknown')} ({pol.get('port_code', 'Unknown')})" if pol else 'Unknown',
+                    'pol_id': str(pol_id) if pol_id else None,
+                    'pod': f"{pod.get('port_name', 'Unknown')} ({pod.get('port_code', 'Unknown')})" if pod else 'Unknown',
+                    'pod_id': str(pod_id) if pod_id else None,
                     'valid_from': rate.get('valid_from'),
                     'valid_to': rate.get('valid_to'),
                     'container_rates': rate.get('container_rates', []),

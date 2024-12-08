@@ -67,14 +67,14 @@ def search_rates():
         data = request.get_json()
         if not data or not data.get('pol_code') or not data.get('pod_code'):
             return jsonify({
-                "status": "success",
-                "data": [],
-                "count": 0
-            }), 200
+                'status': 'error',
+                'message': 'POL and POD codes are required'
+            }), 400
 
+        # Search rates using the model's search method
         results = rate_model.search(data['pol_code'], data['pod_code'])
         
-        # Ensure results is always an array
+        # Format the results
         formatted_results = []
         for rate in results:
             try:
@@ -88,11 +88,13 @@ def search_rates():
                     'pod_id': str(rate.get('pod_id')),
                     'valid_from': rate.get('valid_from'),
                     'valid_to': rate.get('valid_to'),
-                    'container_rates': rate.get('container_rates', [])
+                    'container_rates': rate.get('container_rates', []),
+                    'created_at': rate.get('created_at'),
+                    'updated_at': rate.get('updated_at')
                 }
                 formatted_results.append(formatted_rate)
             except Exception as e:
-                print(f"Error formatting rate: {str(e)}")
+                print(f"Error formatting rate {rate.get('_id')}: {str(e)}")
                 continue
 
         return jsonify({
@@ -100,6 +102,7 @@ def search_rates():
             'data': formatted_results,
             'count': len(formatted_results)
         })
+
     except Exception as e:
         print(f"Error in search_rates: {str(e)}")
         return jsonify({

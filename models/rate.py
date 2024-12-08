@@ -190,3 +190,72 @@ class Rate:
         except Exception as e:
             print(f"Error adding note: {str(e)}")
             raise
+
+    def search(self, pol_code, pod_code):
+        """Search rates by POL and POD codes"""
+        try:
+            # Get port IDs from codes
+            pol = self.db.ports.find_one({"port_code": pol_code.upper()})
+            pod = self.db.ports.find_one({"port_code": pod_code.upper()})
+            
+            if not pol or not pod:
+                return []
+            
+            # Build pipeline to get rates with populated references
+            pipeline = [
+                {
+                    '$match': {
+                        'pol_id': pol['_id'],
+                        'pod_id': pod['_id'],
+                        'valid_to': {'$gte': datetime.utcnow()}  # Only valid rates
+                    }
+                },
+                {
+                    '$lookup': {
+                        'from': 'shipping_lines',
+                        'localField': 'shipping_line_id', 
+                        'foreignField': '_id',
+                        'as': 'shipping_line'
+                    }
+                },
+                {
+                    '$lookup': {
+                        'from': 'ports',
+                        'localField': 'pol_id',
+                        'foreignField': '_id',
+                        'as': 'pol'
+                    }
+                },
+                {
+                    '$lookup': {
+                        'from': 'ports',
+                        'localField': 'pod_id',
+                        'foreignField': '_id',
+                        'as': 'pod'
+                    }
+                },
+                {
+                    '$unwind': {
+                        'path': '$shipping_line',
+                        'preserveNullAndEmptyArrays': True
+                    }
+                },
+                {
+                    '$unwind': {
+                        'path': '$pol',
+                        'preserveNullAndEmptyArrays': True
+                    }
+                },
+                {
+                    '$unwind': {
+                        'path': '$pod',
+                        'preserveNullAndEmptyArrays': True
+                    }
+                }
+            ]
+            
+            return self.collection.aggregate(pipeline)
+            
+        except Exception as e:
+            print(f"Error in rate search: {str(e)}")
+            raise

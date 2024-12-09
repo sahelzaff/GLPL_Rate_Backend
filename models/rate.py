@@ -206,13 +206,25 @@ class Rate:
                     "data": [],
                     "message": "No rates found for given ports"
                 }
+
+            # Ensure we have proper ObjectIds
+            try:
+                pol_id = ObjectId(str(pol['_id']))
+                pod_id = ObjectId(str(pod['_id']))
+            except Exception as e:
+                print(f"Error converting port IDs: {str(e)}")
+                return {
+                    "status": "error",
+                    "message": "Invalid port IDs",
+                    "data": []
+                }
             
             # Build pipeline to get rates with populated references
             pipeline = [
                 {
                     '$match': {
-                        'pol_id': ObjectId(str(pol['_id'])),
-                        'pod_id': ObjectId(str(pod['_id'])),
+                        'pol_id': pol_id,
+                        'pod_id': pod_id,
                         'valid_to': {'$gte': datetime.utcnow()}
                     }
                 },
@@ -266,25 +278,53 @@ class Rate:
             formatted_results = []
             for rate in results:
                 try:
+                    # Ensure we're working with a dictionary
+                    if not isinstance(rate, dict):
+                        print(f"Unexpected rate format: {type(rate)}")
+                        continue
+
+                    # Safely get nested objects
+                    shipping_line = rate.get('shipping_line', {})
+                    if not isinstance(shipping_line, dict):
+                        shipping_line = {}
+                    
+                    pol_data = rate.get('pol', {})
+                    if not isinstance(pol_data, dict):
+                        pol_data = {}
+                    
+                    pod_data = rate.get('pod', {})
+                    if not isinstance(pod_data, dict):
+                        pod_data = {}
+
                     # Format dates safely
                     valid_from = rate.get('valid_from')
                     valid_to = rate.get('valid_to')
                     
-                    if isinstance(valid_from, str):
-                        valid_from = datetime.strptime(valid_from, '%Y-%m-%d')
-                    if isinstance(valid_to, str):
-                        valid_to = datetime.strptime(valid_to, '%Y-%m-%d')
-                    
+                    try:
+                        if valid_from:
+                            if isinstance(valid_from, str):
+                                valid_from = datetime.strptime(valid_from, '%Y-%m-%d')
+                            valid_from = valid_from.strftime('%Y-%m-%d')
+                        
+                        if valid_to:
+                            if isinstance(valid_to, str):
+                                valid_to = datetime.strptime(valid_to, '%Y-%m-%d')
+                            valid_to = valid_to.strftime('%Y-%m-%d')
+                    except Exception as e:
+                        print(f"Error formatting dates: {str(e)}")
+                        valid_from = None
+                        valid_to = None
+
                     formatted_rate = {
                         '_id': str(rate.get('_id', '')),
-                        'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
-                        'shipping_line_id': str(rate.get('shipping_line_id', '')),
-                        'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
-                        'pol_id': str(rate.get('pol_id', '')),
-                        'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
-                        'pod_id': str(rate.get('pod_id', '')),
-                        'valid_from': valid_from.strftime('%Y-%m-%d') if valid_from else None,
-                        'valid_to': valid_to.strftime('%Y-%m-%d') if valid_to else None,
+                        'shipping_line': shipping_line.get('name', 'Unknown'),
+                        'shipping_line_id': str(shipping_line.get('_id', '')),
+                        'pol': f"{pol_data.get('port_name', 'Unknown')} ({pol_data.get('port_code', 'Unknown')})",
+                        'pol_id': str(pol_data.get('_id', '')),
+                        'pod': f"{pod_data.get('port_name', 'Unknown')} ({pod_data.get('port_code', 'Unknown')})",
+                        'pod_id': str(pod_data.get('_id', '')),
+                        'valid_from': valid_from,
+                        'valid_to': valid_to,
                         'container_rates': rate.get('container_rates', []),
                         'created_at': rate.get('created_at'),
                         'updated_at': rate.get('updated_at')

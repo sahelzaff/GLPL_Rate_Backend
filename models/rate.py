@@ -4,13 +4,11 @@ import traceback
 
 class Rate:
     def __init__(self, db):
-        """Initialize Rate model with database instance"""
-        self.db = db  # Store the entire db instance
-        self.collection = db.rates  # Collection for rates
+        self.collection = db.rates
         self.history_collection = db.rate_history
         self.notes_collection = db.rate_notes
-        self.shipping_lines = db.shipping_lines  # Collection for shipping lines
-        self.ports = db.ports  # Collection for ports
+        self.shipping_lines = db.shipping_lines
+        self.ports = db.ports
 
     def get_all(self):
         """Get all rates with populated shipping line and port information"""
@@ -264,16 +262,19 @@ class Rate:
             formatted_results = []
             for rate in results:
                 try:
-                    # Print raw rate for debugging
                     print(f"Processing rate: {rate}")
                     
-                    # Extract container rates and calculate totals
+                    # Format container rates
                     container_rates = []
                     for cr in rate['container_rates']:
                         container_rate = {
                             'type': cr['type'],
-                            'rate': cr['rate'],
-                            'total': cr['rate']  # Base rate is the total for now
+                            'base_rate': cr['base_rate'],
+                            'ewrs_laden': cr['ewrs_laden'],
+                            'ewrs_empty': cr['ewrs_empty'],
+                            'baf': cr['baf'],
+                            'reefer_surcharge': cr.get('reefer_surcharge', 0),
+                            'total': cr['total_cost']
                         }
                         container_rates.append(container_rate)
 
@@ -284,11 +285,11 @@ class Rate:
                         'pod': f"{rate['pod']['port_name']} ({rate['pod']['port_code']})",
                         'valid_from': rate['valid_from'],
                         'valid_to': rate['valid_to'],
-                        'container_rates': container_rates
+                        'container_rates': container_rates,
+                        'created_at': rate['created_at'],
+                        'updated_at': rate['updated_at']
                     }
                     formatted_results.append(formatted_rate)
-                    
-                    # Print formatted rate for debugging
                     print(f"Formatted rate: {formatted_rate}")
                     
                 except Exception as e:

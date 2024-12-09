@@ -241,13 +241,22 @@ class Rate:
                     }
                 },
                 {
-                    '$unwind': '$shipping_line'
+                    '$unwind': {
+                        'path': '$shipping_line',
+                        'preserveNullAndEmptyArrays': True
+                    }
                 },
                 {
-                    '$unwind': '$pol'
+                    '$unwind': {
+                        'path': '$pol',
+                        'preserveNullAndEmptyArrays': True
+                    }
                 },
                 {
-                    '$unwind': '$pod'
+                    '$unwind': {
+                        'path': '$pod',
+                        'preserveNullAndEmptyArrays': True
+                    }
                 }
             ]
             
@@ -257,21 +266,25 @@ class Rate:
             formatted_results = []
             for rate in results:
                 try:
-                    # Safely get nested values
-                    shipping_line = rate.get('shipping_line', {})
-                    pol = rate.get('pol', {})
-                    pod = rate.get('pod', {})
+                    # Format dates safely
+                    valid_from = rate.get('valid_from')
+                    valid_to = rate.get('valid_to')
+                    
+                    if isinstance(valid_from, str):
+                        valid_from = datetime.strptime(valid_from, '%Y-%m-%d')
+                    if isinstance(valid_to, str):
+                        valid_to = datetime.strptime(valid_to, '%Y-%m-%d')
                     
                     formatted_rate = {
                         '_id': str(rate.get('_id', '')),
-                        'shipping_line': shipping_line.get('name', 'Unknown'),
-                        'shipping_line_id': str(shipping_line.get('_id', '')),
-                        'pol': f"{pol.get('port_name', 'Unknown')} ({pol.get('port_code', 'Unknown')})",
-                        'pol_id': str(pol.get('_id', '')),
-                        'pod': f"{pod.get('port_name', 'Unknown')} ({pod.get('port_code', 'Unknown')})",
-                        'pod_id': str(pod.get('_id', '')),
-                        'valid_from': rate.get('valid_from', '').strftime('%Y-%m-%d') if rate.get('valid_from') else None,
-                        'valid_to': rate.get('valid_to', '').strftime('%Y-%m-%d') if rate.get('valid_to') else None,
+                        'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
+                        'shipping_line_id': str(rate.get('shipping_line_id', '')),
+                        'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
+                        'pol_id': str(rate.get('pol_id', '')),
+                        'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
+                        'pod_id': str(rate.get('pod_id', '')),
+                        'valid_from': valid_from.strftime('%Y-%m-%d') if valid_from else None,
+                        'valid_to': valid_to.strftime('%Y-%m-%d') if valid_to else None,
                         'container_rates': rate.get('container_rates', []),
                         'created_at': rate.get('created_at'),
                         'updated_at': rate.get('updated_at')

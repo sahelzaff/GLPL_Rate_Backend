@@ -264,16 +264,33 @@ class Rate:
             formatted_results = []
             for rate in results:
                 try:
+                    # Print raw rate for debugging
+                    print(f"Processing rate: {rate}")
+                    
+                    # Extract container rates and calculate totals
+                    container_rates = []
+                    for cr in rate['container_rates']:
+                        container_rate = {
+                            'type': cr['type'],
+                            'rate': cr['rate'],
+                            'total': cr['rate']  # Base rate is the total for now
+                        }
+                        container_rates.append(container_rate)
+
                     formatted_rate = {
                         '_id': str(rate['_id']),
                         'shipping_line': rate['shipping_line']['name'],
-                        'valid_from': rate['valid_from'],
-                        'valid_to': rate['valid_to'],
                         'pol': f"{rate['pol']['port_name']} ({rate['pol']['port_code']})",
                         'pod': f"{rate['pod']['port_name']} ({rate['pod']['port_code']})",
-                        'container_rates': rate['container_rates']
+                        'valid_from': rate['valid_from'],
+                        'valid_to': rate['valid_to'],
+                        'container_rates': container_rates
                     }
                     formatted_results.append(formatted_rate)
+                    
+                    # Print formatted rate for debugging
+                    print(f"Formatted rate: {formatted_rate}")
+                    
                 except Exception as e:
                     print(f"Error formatting rate: {str(e)}")
                     print(f"Rate data: {rate}")

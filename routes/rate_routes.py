@@ -68,46 +68,22 @@ def search_rates():
         if not data or not data.get('pol_code') or not data.get('pod_code'):
             return jsonify({
                 'status': 'error',
-                'message': 'POL and POD codes are required'
+                'message': 'POL and POD codes are required',
+                'data': []
             }), 400
 
         # Search rates using the model's search method
-        results = rate_model.search(data['pol_code'], data['pod_code'])
+        result = rate_model.search(data['pol_code'], data['pod_code'])
         
-        # Format the results
-        formatted_results = []
-        for rate in results:
-            try:
-                formatted_rate = {
-                    '_id': str(rate['_id']),
-                    'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
-                    'shipping_line_id': str(rate.get('shipping_line_id')),
-                    'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
-                    'pol_id': str(rate.get('pol_id')),
-                    'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
-                    'pod_id': str(rate.get('pod_id')),
-                    'valid_from': rate.get('valid_from'),
-                    'valid_to': rate.get('valid_to'),
-                    'container_rates': rate.get('container_rates', []),
-                    'created_at': rate.get('created_at'),
-                    'updated_at': rate.get('updated_at')
-                }
-                formatted_results.append(formatted_rate)
-            except Exception as e:
-                print(f"Error formatting rate {rate.get('_id')}: {str(e)}")
-                continue
-
-        return jsonify({
-            'status': 'success',
-            'data': formatted_results,
-            'count': len(formatted_results)
-        })
+        # The search method now returns a dictionary with status, data, and message
+        return jsonify(result)
 
     except Exception as e:
         print(f"Error in search_rates: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': str(e),
+            'data': []
         }), 500
 
 @rate_routes.route('/api/rates', methods=['POST'])

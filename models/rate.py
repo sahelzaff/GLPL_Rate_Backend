@@ -1,8 +1,11 @@
 from bson import ObjectId
 from datetime import datetime
+import traceback
 
 class Rate:
     def __init__(self, db):
+        """Initialize Rate model with database instance"""
+        self.db = db  # Store the database instance
         self.collection = db.rates
         self.history_collection = db.rate_history
         self.notes_collection = db.rate_notes
@@ -194,29 +197,40 @@ class Rate:
     def search(self, pol_code, pod_code):
         """Search rates by POL and POD codes"""
         try:
-            # Get port IDs from codes
-            pol = self.db.ports.find_one({"port_code": pol_code.upper()})
-            pod = self.db.ports.find_one({"port_code": pod_code.upper()})
+            print(f"Searching for rates with POL: {pol_code}, POD: {pod_code}")
+            
+            # Get port IDs from codes using ports collection
+            pol = self.ports.find_one({"port_code": pol_code.upper()})
+            pod = self.ports.find_one({"port_code": pod_code.upper()})
+            
+            print(f"Found POL: {pol}")
+            print(f"Found POD: {pod}")
             
             if not pol or not pod:
-                return []
-            
+                return {
+                    "status": "success",
+                    "data": [],
+                    "message": "No rates found for given ports"
+                }
+
             # Build pipeline to get rates with populated references
             pipeline = [
                 {
                     '$match': {
                         'pol_id': pol['_id'],
-                        'pod_id': pod['_id'],
-                        'valid_to': {'$gte': datetime.utcnow()}  # Only valid rates
+                        'pod_id': pod['_id']
                     }
                 },
                 {
                     '$lookup': {
                         'from': 'shipping_lines',
-                        'localField': 'shipping_line_id', 
+                        'localField': 'shipping_line_id',
                         'foreignField': '_id',
                         'as': 'shipping_line'
                     }
+                },
+                {
+                    '$unwind': '$shipping_line'
                 },
                 {
                     '$lookup': {
@@ -227,6 +241,9 @@ class Rate:
                     }
                 },
                 {
+                    '$unwind': '$pol'
+                },
+                {
                     '$lookup': {
                         'from': 'ports',
                         'localField': 'pod_id',
@@ -235,27 +252,64 @@ class Rate:
                     }
                 },
                 {
-                    '$unwind': {
-                        'path': '$shipping_line',
-                        'preserveNullAndEmptyArrays': True
-                    }
-                },
-                {
-                    '$unwind': {
-                        'path': '$pol',
-                        'preserveNullAndEmptyArrays': True
-                    }
-                },
-                {
-                    '$unwind': {
-                        'path': '$pod',
-                        'preserveNullAndEmptyArrays': True
-                    }
+                    '$unwind': '$pod'
                 }
             ]
             
-            return self.collection.aggregate(pipeline)
+            print("Executing aggregation pipeline...")
+            results = list(self.collection.aggregate(pipeline))
+            print(f"Found {len(results)} results")
             
+            # Format the results
+            formatted_results = []
+            for rate in results:
+                try:
+                    print(f"Processing rate: {rate}")
+                    
+                    # Format container rates
+                    container_rates = []
+                    for cr in rate['container_rates']:
+                        container_rate = {
+                            'type': cr['type'],
+                            'base_rate': cr['base_rate'],
+                            'ewrs_laden': cr['ewrs_laden'],
+                            'ewrs_empty': cr['ewrs_empty'],
+                            'baf': cr['baf'],
+                            'reefer_surcharge': cr.get('reefer_surcharge', 0),
+                            'total': cr['total_cost']
+                        }
+                        container_rates.append(container_rate)
+
+                    formatted_rate = {
+                        '_id': str(rate['_id']),
+                        'shipping_line': rate['shipping_line']['name'],
+                        'pol': f"{rate['pol']['port_name']} ({rate['pol']['port_code']})",
+                        'pod': f"{rate['pod']['port_name']} ({rate['pod']['port_code']})",
+                        'valid_from': rate['valid_from'],
+                        'valid_to': rate['valid_to'],
+                        'container_rates': container_rates,
+                        'created_at': rate['created_at'],
+                        'updated_at': rate['updated_at']
+                    }
+                    formatted_results.append(formatted_rate)
+                    print(f"Formatted rate: {formatted_rate}")
+                    
+                except Exception as e:
+                    print(f"Error formatting rate: {str(e)}")
+                    print(f"Rate data: {rate}")
+                    continue
+
+            return {
+                "status": "success",
+                "data": formatted_results,
+                "message": f"Found {len(formatted_results)} rates"
+            }
+
         except Exception as e:
             print(f"Error in rate search: {str(e)}")
-            raise
+            print(f"Full traceback: {traceback.format_exc()}")
+            return {
+                "status": "error",
+                "message": str(e),
+                "data": []
+            }

@@ -3,11 +3,13 @@ from datetime import datetime
 
 class Rate:
     def __init__(self, db):
-        self.collection = db.rates
+        """Initialize Rate model with database instance"""
+        self.db = db  # Store the entire db instance
+        self.collection = db.rates  # Collection for rates
         self.history_collection = db.rate_history
         self.notes_collection = db.rate_notes
-        self.shipping_lines = db.shipping_lines
-        self.ports = db.ports
+        self.shipping_lines = db.shipping_lines  # Collection for shipping lines
+        self.ports = db.ports  # Collection for ports
 
     def get_all(self):
         """Get all rates with populated shipping line and port information"""
@@ -194,7 +196,7 @@ class Rate:
     def search(self, pol_code, pod_code):
         """Search rates by POL and POD codes"""
         try:
-            # Get port IDs from codes
+            # Get port IDs from codes using self.db.ports
             pol = self.db.ports.find_one({"port_code": pol_code.upper()})
             pod = self.db.ports.find_one({"port_code": pod_code.upper()})
             
@@ -254,7 +256,7 @@ class Rate:
                 }
             ]
             
-            return self.collection.aggregate(pipeline)
+            return list(self.collection.aggregate(pipeline))
             
         except Exception as e:
             print(f"Error in rate search: {str(e)}")

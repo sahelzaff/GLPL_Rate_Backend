@@ -213,12 +213,23 @@ class Rate:
                     "message": "No rates found for given ports"
                 }
 
+            try:
+                pol_id = pol['_id']
+                pod_id = pod['_id']
+            except (KeyError, TypeError) as e:
+                print(f"Error accessing port IDs: {str(e)}")
+                return {
+                    "status": "error",
+                    "message": "Invalid port data",
+                    "data": []
+                }
+
             # Build pipeline to get rates with populated references
             pipeline = [
                 {
                     '$match': {
-                        'pol_id': pol['_id'],
-                        'pod_id': pod['_id'],
+                        'pol_id': pol_id,
+                        'pod_id': pod_id,
                         'valid_to': {'$gte': datetime.utcnow()}
                     }
                 },
@@ -273,17 +284,37 @@ class Rate:
             results = list(self.collection.aggregate(pipeline))
             print(f"Found {len(results)} results")
             
+            if not results:
+                return {
+                    "status": "success",
+                    "data": [],
+                    "message": "No rates found for the given ports"
+                }
+            
             # Format the results
             formatted_results = []
             for rate in results:
                 try:
+                    if not isinstance(rate, dict):
+                        print(f"Skipping non-dict rate: {rate}")
+                        continue
+                    
                     print(f"Processing rate: {rate}")
                     
-                    # Extract required fields with error checking
-                    rate_id = str(rate['_id']) if '_id' in rate else 'unknown'
-                    shipping_line = rate.get('shipping_line', {})
-                    pol_data = rate.get('pol', {})
-                    pod_data = rate.get('pod', {})
+                    # Extract required fields with type checking
+                    rate_id = str(rate['_id']) if isinstance(rate.get('_id'), ObjectId) else 'unknown'
+                    
+                    shipping_line = rate.get('shipping_line')
+                    if not isinstance(shipping_line, dict):
+                        shipping_line = {}
+                    
+                    pol_data = rate.get('pol')
+                    if not isinstance(pol_data, dict):
+                        pol_data = {}
+                    
+                    pod_data = rate.get('pod')
+                    if not isinstance(pod_data, dict):
+                        pod_data = {}
                     
                     formatted_rate = {
                         '_id': rate_id,

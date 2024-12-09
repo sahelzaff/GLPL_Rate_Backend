@@ -213,24 +213,12 @@ class Rate:
                     "message": "No rates found for given ports"
                 }
 
-            try:
-                pol_id = pol['_id']
-                pod_id = pod['_id']
-            except (KeyError, TypeError) as e:
-                print(f"Error accessing port IDs: {str(e)}")
-                return {
-                    "status": "error",
-                    "message": "Invalid port data",
-                    "data": []
-                }
-
             # Build pipeline to get rates with populated references
             pipeline = [
                 {
                     '$match': {
-                        'pol_id': pol_id,
-                        'pod_id': pod_id,
-                        'valid_to': {'$gte': datetime.utcnow()}
+                        'pol_id': pol['_id'],
+                        'pod_id': pod['_id']
                     }
                 },
                 {
@@ -238,45 +226,33 @@ class Rate:
                         'from': 'shipping_lines',
                         'localField': 'shipping_line_id',
                         'foreignField': '_id',
-                        'as': 'shipping_lines'
+                        'as': 'shipping_line'
                     }
+                },
+                {
+                    '$unwind': '$shipping_line'
                 },
                 {
                     '$lookup': {
                         'from': 'ports',
                         'localField': 'pol_id',
                         'foreignField': '_id',
-                        'as': 'pol_data'
+                        'as': 'pol'
                     }
+                },
+                {
+                    '$unwind': '$pol'
                 },
                 {
                     '$lookup': {
                         'from': 'ports',
                         'localField': 'pod_id',
                         'foreignField': '_id',
-                        'as': 'pod_data'
+                        'as': 'pod'
                     }
                 },
                 {
-                    '$match': {
-                        'shipping_lines': {'$ne': []},
-                        'pol_data': {'$ne': []},
-                        'pod_data': {'$ne': []}
-                    }
-                },
-                {
-                    '$addFields': {
-                        'shipping_line': {'$arrayElemAt': ['$shipping_lines', 0]},
-                        'pol': {'$arrayElemAt': ['$pol_data', 0]},
-                        'pod': {'$arrayElemAt': ['$pod_data', 0]}
-                    }
-                },
-                {
-                    '$project': {
-                        'shipping_lines': 0,
-                        'pol_data': 0,
-                        'pod_data': 0
-                    }
+                    '$unwind': '$pod'
                 }
             ]
             
@@ -284,55 +260,22 @@ class Rate:
             results = list(self.collection.aggregate(pipeline))
             print(f"Found {len(results)} results")
             
-            if not results:
-                return {
-                    "status": "success",
-                    "data": [],
-                    "message": "No rates found for the given ports"
-                }
-            
             # Format the results
             formatted_results = []
             for rate in results:
                 try:
-                    if not isinstance(rate, dict):
-                        print(f"Skipping non-dict rate: {rate}")
-                        continue
-                    
-                    print(f"Processing rate: {rate}")
-                    
-                    # Extract required fields with type checking
-                    rate_id = str(rate['_id']) if isinstance(rate.get('_id'), ObjectId) else 'unknown'
-                    
-                    shipping_line = rate.get('shipping_line')
-                    if not isinstance(shipping_line, dict):
-                        shipping_line = {}
-                    
-                    pol_data = rate.get('pol')
-                    if not isinstance(pol_data, dict):
-                        pol_data = {}
-                    
-                    pod_data = rate.get('pod')
-                    if not isinstance(pod_data, dict):
-                        pod_data = {}
-                    
                     formatted_rate = {
-                        '_id': rate_id,
-                        'shipping_line': shipping_line.get('name', 'Unknown'),
-                        'shipping_line_id': str(shipping_line.get('_id', '')),
-                        'pol': f"{pol_data.get('port_name', 'Unknown')} ({pol_data.get('port_code', 'Unknown')})",
-                        'pol_id': str(rate.get('pol_id', '')),
-                        'pod': f"{pod_data.get('port_name', 'Unknown')} ({pod_data.get('port_code', 'Unknown')})",
-                        'pod_id': str(rate.get('pod_id', '')),
-                        'valid_from': rate.get('valid_from'),
-                        'valid_to': rate.get('valid_to'),
-                        'container_rates': rate.get('container_rates', []),
-                        'created_at': rate.get('created_at'),
-                        'updated_at': rate.get('updated_at')
+                        '_id': str(rate['_id']),
+                        'shipping_line': rate['shipping_line']['name'],
+                        'valid_from': rate['valid_from'],
+                        'valid_to': rate['valid_to'],
+                        'pol': f"{rate['pol']['port_name']} ({rate['pol']['port_code']})",
+                        'pod': f"{rate['pod']['port_name']} ({rate['pod']['port_code']})",
+                        'container_rates': rate['container_rates']
                     }
                     formatted_results.append(formatted_rate)
                 except Exception as e:
-                    print(f"Error formatting rate {rate.get('_id', 'unknown')}: {str(e)}")
+                    print(f"Error formatting rate: {str(e)}")
                     print(f"Rate data: {rate}")
                     continue
 

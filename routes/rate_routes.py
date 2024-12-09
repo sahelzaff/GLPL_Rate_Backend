@@ -67,24 +67,34 @@ def search_rates():
         data = request.get_json()
         if not data or not data.get('pol_code') or not data.get('pod_code'):
             return jsonify({
-                'status': 'error',
-                'message': 'POL and POD codes are required',
-                'data': []
-            }), 400
+                'status': 'success',
+                'data': {
+                    'data': [],
+                    'message': 'POL and POD codes are required'
+                }
+            }), 200
 
         # Search rates using the model's search method
         result = rate_model.search(data['pol_code'], data['pod_code'])
         
-        # The search method now returns a dictionary with status, data, and message
-        return jsonify(result)
+        # Ensure consistent response format
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'data': result.get('data', []),
+                'message': result.get('message', '')
+            }
+        }), 200
 
     except Exception as e:
         print(f"Error in search_rates: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': str(e),
-            'data': []
-        }), 500
+            'data': {
+                'data': [],
+                'message': str(e)
+            }
+        }), 200
 
 @rate_routes.route('/api/rates', methods=['POST'])
 @admin_required

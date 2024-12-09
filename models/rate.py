@@ -207,8 +207,8 @@ class Rate:
             pipeline = [
                 {
                     '$match': {
-                        'pol_id': pol['_id'],
-                        'pod_id': pod['_id'],
+                        'pol_id': ObjectId(str(pol['_id'])),  # Convert to ObjectId
+                        'pod_id': ObjectId(str(pod['_id'])),  # Convert to ObjectId
                         'valid_to': {'$gte': datetime.utcnow()}  # Only valid rates
                     }
                 },
@@ -263,13 +263,13 @@ class Rate:
             for rate in results:
                 try:
                     formatted_rate = {
-                        '_id': str(rate['_id']),
+                        '_id': str(rate['_id']) if isinstance(rate.get('_id'), ObjectId) else str(rate.get('_id', '')),
                         'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
-                        'shipping_line_id': str(rate.get('shipping_line_id')),
+                        'shipping_line_id': str(rate.get('shipping_line_id', '')),
                         'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
-                        'pol_id': str(rate.get('pol_id')),
+                        'pol_id': str(rate.get('pol_id', '')),
                         'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
-                        'pod_id': str(rate.get('pod_id')),
+                        'pod_id': str(rate.get('pod_id', '')),
                         'valid_from': rate.get('valid_from'),
                         'valid_to': rate.get('valid_to'),
                         'container_rates': rate.get('container_rates', []),
@@ -278,7 +278,7 @@ class Rate:
                     }
                     formatted_results.append(formatted_rate)
                 except Exception as e:
-                    print(f"Error formatting rate {rate.get('_id')}: {str(e)}")
+                    print(f"Error formatting rate {rate.get('_id', 'unknown')}: {str(e)}")
                     continue
             
             return {

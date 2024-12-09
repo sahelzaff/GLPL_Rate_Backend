@@ -4,6 +4,8 @@ import traceback
 
 class Rate:
     def __init__(self, db):
+        """Initialize Rate model with database instance"""
+        self.db = db  # Store the database instance
         self.collection = db.rates
         self.history_collection = db.rate_history
         self.notes_collection = db.rate_notes
@@ -197,9 +199,9 @@ class Rate:
         try:
             print(f"Searching for rates with POL: {pol_code}, POD: {pod_code}")
             
-            # Get port IDs from codes using self.db.ports
-            pol = self.db.ports.find_one({"port_code": pol_code.upper()})
-            pod = self.db.ports.find_one({"port_code": pod_code.upper()})
+            # Get port IDs from codes using ports collection
+            pol = self.ports.find_one({"port_code": pol_code.upper()})
+            pod = self.ports.find_one({"port_code": pod_code.upper()})
             
             print(f"Found POL: {pol}")
             print(f"Found POD: {pod}")

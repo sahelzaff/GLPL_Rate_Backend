@@ -201,21 +201,25 @@ class Rate:
             pod = self.db.ports.find_one({"port_code": pod_code.upper()})
             
             if not pol or not pod:
-                return {"status": "success", "data": [], "count": 0}
+                return {
+                    "status": "success",
+                    "data": [],
+                    "message": "No rates found for given ports"
+                }
             
             # Build pipeline to get rates with populated references
             pipeline = [
                 {
                     '$match': {
-                        'pol_id': ObjectId(str(pol['_id'])),  # Convert to ObjectId
-                        'pod_id': ObjectId(str(pod['_id'])),  # Convert to ObjectId
-                        'valid_to': {'$gte': datetime.utcnow()}  # Only valid rates
+                        'pol_id': ObjectId(str(pol['_id'])),
+                        'pod_id': ObjectId(str(pod['_id'])),
+                        'valid_to': {'$gte': datetime.utcnow()}
                     }
                 },
                 {
                     '$lookup': {
                         'from': 'shipping_lines',
-                        'localField': 'shipping_line_id', 
+                        'localField': 'shipping_line_id',
                         'foreignField': '_id',
                         'as': 'shipping_line'
                     }
@@ -237,22 +241,13 @@ class Rate:
                     }
                 },
                 {
-                    '$unwind': {
-                        'path': '$shipping_line',
-                        'preserveNullAndEmptyArrays': True
-                    }
+                    '$unwind': '$shipping_line'
                 },
                 {
-                    '$unwind': {
-                        'path': '$pol',
-                        'preserveNullAndEmptyArrays': True
-                    }
+                    '$unwind': '$pol'
                 },
                 {
-                    '$unwind': {
-                        'path': '$pod',
-                        'preserveNullAndEmptyArrays': True
-                    }
+                    '$unwind': '$pod'
                 }
             ]
             
@@ -263,35 +258,42 @@ class Rate:
             for rate in results:
                 try:
                     formatted_rate = {
-                        '_id': str(rate['_id']) if isinstance(rate.get('_id'), ObjectId) else str(rate.get('_id', '')),
-                        'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
-                        'shipping_line_id': str(rate.get('shipping_line_id', '')),
-                        'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
-                        'pol_id': str(rate.get('pol_id', '')),
-                        'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
-                        'pod_id': str(rate.get('pod_id', '')),
-                        'valid_from': rate.get('valid_from'),
-                        'valid_to': rate.get('valid_to'),
+                        '_id': str(rate['_id']),
+                        'shipping_line': {
+                            'name': rate['shipping_line']['name'],
+                            '_id': str(rate['shipping_line']['_id'])
+                        },
+                        'pol': {
+                            'name': rate['pol']['port_name'],
+                            'code': rate['pol']['port_code'],
+                            '_id': str(rate['pol']['_id'])
+                        },
+                        'pod': {
+                            'name': rate['pod']['port_name'],
+                            'code': rate['pod']['port_code'],
+                            '_id': str(rate['pod']['_id'])
+                        },
+                        'valid_from': rate['valid_from'].strftime('%Y-%m-%d') if rate.get('valid_from') else None,
+                        'valid_to': rate['valid_to'].strftime('%Y-%m-%d') if rate.get('valid_to') else None,
                         'container_rates': rate.get('container_rates', []),
                         'created_at': rate.get('created_at'),
                         'updated_at': rate.get('updated_at')
                     }
                     formatted_results.append(formatted_rate)
                 except Exception as e:
-                    print(f"Error formatting rate {rate.get('_id', 'unknown')}: {str(e)}")
+                    print(f"Error formatting rate: {str(e)}")
                     continue
-            
+
             return {
                 "status": "success",
                 "data": formatted_results,
-                "count": len(formatted_results)
+                "message": f"Found {len(formatted_results)} rates"
             }
-            
+
         except Exception as e:
             print(f"Error in rate search: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
-                "data": [],
-                "count": 0
+                "data": []
             }

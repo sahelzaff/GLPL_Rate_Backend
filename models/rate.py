@@ -1,5 +1,6 @@
 from bson import ObjectId
 from datetime import datetime
+import traceback
 
 class Rate:
     def __init__(self, db):
@@ -196,9 +197,14 @@ class Rate:
     def search(self, pol_code, pod_code):
         """Search rates by POL and POD codes"""
         try:
+            print(f"Searching for rates with POL: {pol_code}, POD: {pod_code}")
+            
             # Get port IDs from codes using self.db.ports
             pol = self.db.ports.find_one({"port_code": pol_code.upper()})
             pod = self.db.ports.find_one({"port_code": pod_code.upper()})
+            
+            print(f"Found POL: {pol}")
+            print(f"Found POD: {pod}")
             
             if not pol or not pod:
                 return {
@@ -221,7 +227,7 @@ class Rate:
                         'from': 'shipping_lines',
                         'localField': 'shipping_line_id',
                         'foreignField': '_id',
-                        'as': 'shipping_line'
+                        'as': 'shipping_lines'
                     }
                 },
                 {
@@ -229,7 +235,7 @@ class Rate:
                         'from': 'ports',
                         'localField': 'pol_id',
                         'foreignField': '_id',
-                        'as': 'pol'
+                        'as': 'pol_data'
                     }
                 },
                 {
@@ -237,43 +243,66 @@ class Rate:
                         'from': 'ports',
                         'localField': 'pod_id',
                         'foreignField': '_id',
-                        'as': 'pod'
+                        'as': 'pod_data'
                     }
                 },
                 {
-                    '$unwind': '$shipping_line'
+                    '$match': {
+                        'shipping_lines': {'$ne': []},
+                        'pol_data': {'$ne': []},
+                        'pod_data': {'$ne': []}
+                    }
                 },
                 {
-                    '$unwind': '$pol'
+                    '$addFields': {
+                        'shipping_line': {'$arrayElemAt': ['$shipping_lines', 0]},
+                        'pol': {'$arrayElemAt': ['$pol_data', 0]},
+                        'pod': {'$arrayElemAt': ['$pod_data', 0]}
+                    }
                 },
                 {
-                    '$unwind': '$pod'
+                    '$project': {
+                        'shipping_lines': 0,
+                        'pol_data': 0,
+                        'pod_data': 0
+                    }
                 }
             ]
             
+            print("Executing aggregation pipeline...")
             results = list(self.collection.aggregate(pipeline))
+            print(f"Found {len(results)} results")
             
             # Format the results
             formatted_results = []
             for rate in results:
                 try:
+                    print(f"Processing rate: {rate}")
+                    
+                    # Extract required fields with error checking
+                    rate_id = str(rate['_id']) if '_id' in rate else 'unknown'
+                    shipping_line = rate.get('shipping_line', {})
+                    pol_data = rate.get('pol', {})
+                    pod_data = rate.get('pod', {})
+                    
                     formatted_rate = {
-                        '_id': str(rate['_id']),
-                        'shipping_line': rate['shipping_line']['name'],
-                        'shipping_line_id': str(rate['shipping_line_id']),
-                        'pol': f"{rate['pol']['port_name']} ({rate['pol']['port_code']})",
-                        'pol_id': str(rate['pol_id']),
-                        'pod': f"{rate['pod']['port_name']} ({rate['pod']['port_code']})",
-                        'pod_id': str(rate['pod_id']),
-                        'valid_from': rate['valid_from'],
-                        'valid_to': rate['valid_to'],
-                        'container_rates': rate['container_rates'],
-                        'created_at': rate['created_at'],
-                        'updated_at': rate['updated_at']
+                        '_id': rate_id,
+                        'shipping_line': shipping_line.get('name', 'Unknown'),
+                        'shipping_line_id': str(shipping_line.get('_id', '')),
+                        'pol': f"{pol_data.get('port_name', 'Unknown')} ({pol_data.get('port_code', 'Unknown')})",
+                        'pol_id': str(rate.get('pol_id', '')),
+                        'pod': f"{pod_data.get('port_name', 'Unknown')} ({pod_data.get('port_code', 'Unknown')})",
+                        'pod_id': str(rate.get('pod_id', '')),
+                        'valid_from': rate.get('valid_from'),
+                        'valid_to': rate.get('valid_to'),
+                        'container_rates': rate.get('container_rates', []),
+                        'created_at': rate.get('created_at'),
+                        'updated_at': rate.get('updated_at')
                     }
                     formatted_results.append(formatted_rate)
                 except Exception as e:
-                    print(f"Error formatting rate: {str(e)}")
+                    print(f"Error formatting rate {rate.get('_id', 'unknown')}: {str(e)}")
+                    print(f"Rate data: {rate}")
                     continue
 
             return {
@@ -284,6 +313,7 @@ class Rate:
 
         except Exception as e:
             print(f"Error in rate search: {str(e)}")
+            print(f"Full traceback: {traceback.format_exc()}")
             return {
                 "status": "error",
                 "message": str(e),

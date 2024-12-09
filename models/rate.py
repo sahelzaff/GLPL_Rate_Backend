@@ -201,7 +201,7 @@ class Rate:
             pod = self.db.ports.find_one({"port_code": pod_code.upper()})
             
             if not pol or not pod:
-                return []
+                return {"status": "success", "data": [], "count": 0}
             
             # Build pipeline to get rates with populated references
             pipeline = [
@@ -256,8 +256,42 @@ class Rate:
                 }
             ]
             
-            return list(self.collection.aggregate(pipeline))
+            results = list(self.collection.aggregate(pipeline))
+            
+            # Format the results
+            formatted_results = []
+            for rate in results:
+                try:
+                    formatted_rate = {
+                        '_id': str(rate['_id']),
+                        'shipping_line': rate.get('shipping_line', {}).get('name', 'Unknown'),
+                        'shipping_line_id': str(rate.get('shipping_line_id')),
+                        'pol': f"{rate.get('pol', {}).get('port_name', 'Unknown')} ({rate.get('pol', {}).get('port_code', 'Unknown')})",
+                        'pol_id': str(rate.get('pol_id')),
+                        'pod': f"{rate.get('pod', {}).get('port_name', 'Unknown')} ({rate.get('pod', {}).get('port_code', 'Unknown')})",
+                        'pod_id': str(rate.get('pod_id')),
+                        'valid_from': rate.get('valid_from'),
+                        'valid_to': rate.get('valid_to'),
+                        'container_rates': rate.get('container_rates', []),
+                        'created_at': rate.get('created_at'),
+                        'updated_at': rate.get('updated_at')
+                    }
+                    formatted_results.append(formatted_rate)
+                except Exception as e:
+                    print(f"Error formatting rate {rate.get('_id')}: {str(e)}")
+                    continue
+            
+            return {
+                "status": "success",
+                "data": formatted_results,
+                "count": len(formatted_results)
+            }
             
         except Exception as e:
             print(f"Error in rate search: {str(e)}")
-            raise
+            return {
+                "status": "error",
+                "message": str(e),
+                "data": [],
+                "count": 0
+            }

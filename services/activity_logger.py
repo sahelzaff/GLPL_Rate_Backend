@@ -31,6 +31,7 @@ class ActivityLogger:
         
         # Railway.app Redis connection details
         REDIS_URL = "redis://default:YCNmYklVCdzfCmpMymNXyhBVovpoXEdp@autorack.proxy.rlwy.net:28674"  # Replace with your actual Redis URL
+        # REDIS_URL = "redis://localhost:6379"  # Replace with your actual Redis URL
         
         try:
             self.redis = redis.from_url(
@@ -40,6 +41,8 @@ class ActivityLogger:
             )
             self.redis.ping()
             print("Successfully connected to Redis on Railway.app!")
+            # self.redis.ping()
+            # print("Successfully connected to Redis on Local Redis!")
             self.redis_available = True
         except redis.ConnectionError as e:
             print(f"Warning: Redis connection failed: {str(e)}")

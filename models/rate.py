@@ -256,7 +256,6 @@ class Rate:
                 }
             ]
             
-            print("Executing aggregation pipeline...")
             results = list(self.collection.aggregate(pipeline))
             print(f"Found {len(results)} results")
             
@@ -265,37 +264,74 @@ class Rate:
             for rate in results:
                 try:
                     print(f"Processing rate: {rate}")
-                    
-                    # Format container rates
+                    # Format container rates - handle both formats
                     container_rates = []
                     for cr in rate['container_rates']:
-                        container_rate = {
-                            'type': cr['type'],
-                            'base_rate': cr['base_rate'],
-                            'ewrs_laden': cr['ewrs_laden'],
-                            'ewrs_empty': cr['ewrs_empty'],
-                            'baf': cr['baf'],
-                            'reefer_surcharge': cr.get('reefer_surcharge', 0),
-                            'total': cr['total_cost']
-                        }
-                        container_rates.append(container_rate)
+                        try:
+                            # Check which format the rate is in
+                            if isinstance(cr.get('rate'), (int, float)):
+                                # Handle simple numeric rate
+                                rate_value = cr['rate']
+                                container_rate = {
+                                    'type': cr['type'],
+                                    'base_rate': rate_value,
+                                    'ewrs_laden': 0,
+                                    'ewrs_empty': 0,
+                                    'baf': 0,
+                                    'reefer_surcharge': 0,
+                                    'total': rate_value
+                                }
+                                container_rates.append(container_rate)
+                            elif isinstance(cr.get('rate'), dict) and '$numberInt' in cr['rate']:
+                                # Handle MongoDB NumberInt format
+                                rate_value = int(cr['rate']['$numberInt'])
+                                container_rate = {
+                                    'type': cr['type'],
+                                    'base_rate': rate_value,
+                                    'ewrs_laden': 0,
+                                    'ewrs_empty': 0,
+                                    'baf': 0,
+                                    'reefer_surcharge': 0,
+                                    'total': rate_value
+                                }
+                                container_rates.append(container_rate)
+                            elif 'base_rate' in cr:
+                                # Handle detailed rate format
+                                container_rate = {
+                                    'type': cr['type'],
+                                    'base_rate': cr.get('base_rate', 0),
+                                    'ewrs_laden': cr.get('ewrs_laden', 0),
+                                    'ewrs_empty': cr.get('ewrs_empty', 0),
+                                    'baf': cr.get('baf', 0),
+                                    'reefer_surcharge': cr.get('reefer_surcharge', 0),
+                                    'total': cr.get('total_cost', 
+                                                  sum([cr.get('base_rate', 0),
+                                                       cr.get('ewrs_laden', 0),
+                                                       cr.get('ewrs_empty', 0),
+                                                       cr.get('baf', 0),
+                                                       cr.get('reefer_surcharge', 0)]))
+                                }
+                                container_rates.append(container_rate)
+                        except Exception as e:
+                            print(f"Error processing container rate: {e}")
+                            print(f"Container rate data: {cr}")
+                            continue
 
-                    formatted_rate = {
-                        '_id': str(rate['_id']),
-                        'shipping_line': rate['shipping_line']['name'],
-                        'pol': f"{rate['pol']['port_name']} ({rate['pol']['port_code']})",
-                        'pod': f"{rate['pod']['port_name']} ({rate['pod']['port_code']})",
-                        'valid_from': rate['valid_from'],
-                        'valid_to': rate['valid_to'],
-                        'container_rates': container_rates,
-                        'created_at': rate['created_at'],
-                        'updated_at': rate['updated_at']
-                    }
-                    formatted_results.append(formatted_rate)
-                    print(f"Formatted rate: {formatted_rate}")
-                    
+                    if container_rates:  # Only add the rate if it has valid container rates
+                        formatted_rate = {
+                            '_id': str(rate['_id']),
+                            'shipping_line': rate['shipping_line']['name'],
+                            'pol': f"{rate['pol']['port_name']} ({rate['pol']['port_code']})",
+                            'pod': f"{rate['pod']['port_name']} ({rate['pod']['port_code']})",
+                            'valid_from': rate['valid_from'],
+                            'valid_to': rate['valid_to'],
+                            'container_rates': container_rates,
+                            'created_at': rate['created_at'],
+                            'updated_at': rate['updated_at']
+                        }
+                        formatted_results.append(formatted_rate)
                 except Exception as e:
-                    print(f"Error formatting rate: {str(e)}")
+                    print(f"Error formatting rate: {e}")
                     print(f"Rate data: {rate}")
                     continue
 
